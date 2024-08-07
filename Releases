@@ -1,0 +1,32 @@
+Use PDP_Corestar
+DECLARE @StartDate DATE = '2024-07-01';
+DECLARE @EndDate DATE = '2024-07-31';
+SELECT
+    v_AdmissionsAndReleases.OFFENDER,
+    v_AdmissionsAndReleases.LID,
+    v_AdmissionsAndReleases.Admission,
+    v_AdmissionsAndReleases.Release,
+    REP_OFFENDERS.NAMETAG,
+	Rep_Offenders.RACE,
+	Rep_Offenders.SEX,
+    REP_ALIASES.DOB,
+    DATEDIFF(YEAR, REP_ALIASES.DOB, GETDATE()) -
+    CASE
+        WHEN MONTH(REP_ALIASES.DOB) > MONTH(GETDATE())
+             OR (MONTH(REP_ALIASES.DOB) = MONTH(GETDATE()) AND DAY(REP_ALIASES.DOB) > DAY(GETDATE()))
+        THEN 1
+        ELSE 0
+    END AS Age
+FROM
+    v_AdmissionsAndReleases
+INNER JOIN
+    REP_OFFENDERS
+    ON v_AdmissionsAndReleases.OFFENDER = REP_OFFENDERS.OFFENDER
+INNER JOIN
+    REP_ALIASES
+    ON REP_OFFENDERS.NAMETAG = REP_ALIASES.NAMETAG
+    AND REP_OFFENDERS.OFFENDER = REP_ALIASES.OFFENDER
+Where 
+      Release BETWEEN @StartDate AND @EndDate
+Order by Age;
+
