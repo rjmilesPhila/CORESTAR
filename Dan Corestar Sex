@@ -1,0 +1,55 @@
+	DECLARE @myDate AS DATETIME = '2024-08-01 00:00:00.000';
+
+WITH TotalOffenders AS (
+    SELECT 
+ COUNT(DISTINCT H.OFFENDER) AS Total
+    FROM 
+        REP_HOUSINGCHANGES H
+    INNER JOIN
+        REP_OFFENDERS O ON H.OFFENDER = O.OFFENDER
+    INNER JOIN
+        REP_ALIASES A ON H.OFFENDER = A.OFFENDER AND H.NAMETAG = A.NAMETAG
+    WHERE 
+        (MOVEIN <= @myDate) 
+        AND (MOVEOUT >= '2024-07-31 00:00:00.000' OR MOVEOUT IS NULL)
+        AND FACILITY NOT IN ('OC', 'OJ')
+),
+
+
+NormalizedSexCounts AS (
+    SELECT 
+        CASE 
+            WHEN O.SEX IN ('MALE') THEN 'Male'
+            WHEN O.SEX IN ('FEMALE') THEN 'Female'
+        
+            ELSE O.SEX
+        END AS NormalizedSexCounts,
+  COUNT(DISTINCT H.OFFENDER) AS CountBySex
+    FROM 
+        REP_HOUSINGCHANGES H
+    INNER JOIN
+        REP_OFFENDERS O ON H.OFFENDER = O.OFFENDER
+    INNER JOIN
+        REP_ALIASES A ON H.OFFENDER = A.OFFENDER AND H.NAMETAG = A.NAMETAG
+    WHERE 
+        (MOVEIN <= @myDate) 
+        AND (MOVEOUT >= '2024-07-31 00:00:00.000' OR MOVEOUT IS NULL)
+        AND FACILITY NOT IN ('OC', 'OJ')
+    GROUP BY 
+        CASE 
+           WHEN O.SEX IN ('MALE') THEN 'Male'
+            WHEN O.SEX IN ('FEMALE') THEN 'Female'
+     
+            ELSE O.SEX
+        END
+)
+
+
+SELECT 
+    NormalizedSexCounts,
+    CountBySex,
+ FORMAT((CountBySex * 100.0 / Total.Total), '0.00') + '%' AS Percentage
+FROM 
+    NormalizedSexCounts
+CROSS JOIN
+    TotalOffenders Total;
