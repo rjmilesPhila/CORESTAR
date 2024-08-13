@@ -1,0 +1,20 @@
+ this gives you all IPs on last day of month.                                                                                                                                                                     DECLARE @myDate as datetime = '2024-08-01 00:00:00.000'
+DECLARE @myDate as datetime = '2024-08-01 00:00:00.000' 
+SELECT DISTINCT
+       O.PPN
+      ,A.LNAME
+      ,A.RNAME
+      ,O.SEX
+      ,O.RACE
+      ,O.RELIGION
+      ,@myDate AS [Snapshot Date]
+FROM 
+      REP_HOUSINGCHANGES H          
+INNER JOIN
+      REP_OFFENDERS O ON H.OFFENDER = O.OFFENDER
+INNER JOIN
+      REP_ALIASES A ON H.OFFENDER = A.OFFENDER AND H.NAMETAG = A.NAMETAG
+WHERE 
+      (MOVEIN <= @myDate) 
+      AND (MOVEOUT >= '2024-07-31 00:00:00.000' OR MOVEOUT IS NULL)
+      AND FACILITY NOT IN ('OC', 'OJ')
