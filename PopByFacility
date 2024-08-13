@@ -1,0 +1,36 @@
+WITH TotalPopulation AS (
+    SELECT COUNT(J.OFFENDER) AS TotalCount
+    FROM REP_JAILHOUSE J
+    INNER JOIN REP_OFFENDERS O ON J.OFFENDER = O.OFFENDER
+    WHERE
+        J.OFFENDER IS NOT NULL
+        AND J.FACILITY NOT IN ('OC', 'OJ')
+		AND J.FACILITY = 'RCF' --Change RCF to CFCF, PICC, or DC  
+),
+DateSexPopulation AS (
+    SELECT
+        CAST(J.LOADTIME AS DATE) AS [Date],
+        O.SEX,
+        COUNT(J.OFFENDER) AS Population
+    FROM
+        REP_JAILHOUSE J
+        INNER JOIN REP_OFFENDERS O ON J.OFFENDER = O.OFFENDER
+    WHERE
+        J.OFFENDER IS NOT NULL
+        AND J.FACILITY NOT IN ('OC', 'OJ')
+		AND J.FACILITY = 'RCF'  --Change RCF to CFCF, PICC, or DC
+    GROUP BY
+        CAST(J.LOADTIME AS DATE),
+        O.SEX
+)
+SELECT
+    D.[Date],
+    D.SEX,
+    D.Population AS POPULATION,
+    (D.Population * 100.0 / T.TotalCount) AS PERCENTAGE
+FROM
+    DateSexPopulation D
+    CROSS JOIN TotalPopulation T
+ORDER BY
+    D.SEX,  -- Sort by sex
+    D.[Date];  -- Sort by date if there are multiple dates for the same sex
