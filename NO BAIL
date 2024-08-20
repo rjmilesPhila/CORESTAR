@@ -1,0 +1,43 @@
+SELECT
+    B.OFFENDER,
+    B.PPN,
+    B.FACILITY,
+    B.SECURITY AS [CUSTODY LEVEL],
+    B.RACE,
+    B.SEX AS [GENDER],
+    FORMAT(B.DOB, 'MM-dd-yyyy') AS [BIRTHDATE],
+    DATEDIFF(YEAR, B.DOB, GETDATE()) - 
+        CASE 
+            WHEN MONTH(B.DOB) > MONTH(GETDATE()) 
+                OR (MONTH(B.DOB) = MONTH(GETDATE()) AND DAY(B.DOB) > DAY(GETDATE())) 
+            THEN 1 
+            ELSE 0 
+        END AS [AGE],
+    B.LNAME AS [LAST NAME],
+    B.RNAME AS [FIRST NAME],
+    SUM(B.BAIL) AS [TOTAL BAIL]
+FROM 
+    V_BAILVIEW B
+LEFT JOIN 
+    REP_DETAINERS DET ON B.OFFENDER = DET.OFFENDER
+WHERE
+    B.BAIL IS NULL
+    AND EXISTS (
+        SELECT 1 
+        FROM V_BAILVIEW B2 
+        WHERE B2.OFFENDER = B.OFFENDER 
+        AND B2.BAIL IS NULL
+    )
+GROUP BY 
+    B.OFFENDER,
+    B.PPN,
+    B.FACILITY,
+    B.SECURITY,
+    B.RACE,
+    B.SEX,
+    B.DOB,
+    B.LNAME,
+    B.RNAME
+ORDER BY
+    B.LNAME,
+    B.RNAME;
