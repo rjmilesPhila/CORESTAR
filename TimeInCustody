@@ -1,0 +1,29 @@
+WITH TimeInCustodyEOM AS (SELECT        FACILITY, COUNT(DISTINCT OFFENDER) AS [IP by Facility], SUM(DATEDIFF(DAY, MOVEIN, ISNULL(MOVEOUT, EOMONTH(GETDATE(), - 1)))) AS [Total Time In Custody], AVG(DATEDIFF(DAY, MOVEIN, 
+                                                                                           ISNULL(MOVEOUT, EOMONTH(GETDATE(), - 1)))) AS [Average Time In Custody (days)], CASE WHEN DATEDIFF(DAY, HC.MOVEIN, ISNULL(HC.MOVEOUT, EOMONTH(GETDATE(), - 1))) 
+                                                                                           <= 30 THEN '30 days or less' WHEN DATEDIFF(DAY, HC.MOVEIN, ISNULL(HC.MOVEOUT, EOMONTH(GETDATE(), - 1))) BETWEEN 31 AND 60 THEN '31 - 60 days' WHEN DATEDIFF(DAY, HC.MOVEIN,
+                                                                                            ISNULL(HC.MOVEOUT, EOMONTH(GETDATE(), - 1))) BETWEEN 61 AND 90 THEN '61 - 90 days' ELSE '91 or more days' END AS [Duration In Custody]
+                                                                 FROM            (SELECT DISTINCT OFFENDER, LID, FACILITY, MOVEIN, MOVEOUT
+                                                                                           FROM            dbo.REP_HOUSINGCHANGES
+                                                                                           WHERE        (CAST(MOVEIN AS Date) <= EOMONTH(GETDATE(), - 1)) AND (CAST(MOVEOUT AS Date) >= CONVERT(DATETIME, EOMONTH(GETDATE(), - 1))) AND (FACILITY NOT IN ('OC', 'OJ')) OR
+                                                                                                                     (CAST(MOVEIN AS Date) <= EOMONTH(GETDATE(), - 1)) AND (FACILITY NOT IN ('OC', 'OJ')) AND (MOVEOUT IS NULL)) AS HC
+                                                                 GROUP BY FACILITY, CASE WHEN DATEDIFF(DAY, HC.MOVEIN, ISNULL(HC.MOVEOUT, EOMONTH(GETDATE(), - 1))) <= 30 THEN '30 days or less' WHEN DATEDIFF(DAY, HC.MOVEIN, ISNULL(HC.MOVEOUT, 
+                                                                                           EOMONTH(GETDATE(), - 1))) BETWEEN 31 AND 60 THEN '31 - 60 days' WHEN DATEDIFF(DAY, HC.MOVEIN, ISNULL(HC.MOVEOUT, EOMONTH(GETDATE(), - 1))) BETWEEN 61 AND 
+                                                                                           90 THEN '61 - 90 days' ELSE '91 or more days' END), FacilityPopulations AS
+    (SELECT        FACILITY, SUM([IP by Facility]) AS [IP Population by Facility], SUM([Total Time In Custody]) AS [Total Time In Custody]
+      FROM            TimeInCustodyEOM AS TimeInCustodyEOM_1
+      GROUP BY FACILITY), OverallEOMCalc AS
+    (SELECT        SUM([IP Population by Facility]) AS [Total IP Population], SUM([Total Time In Custody]) AS [Overall Total Time In Custody]
+      FROM            FacilityPopulations AS FacilityPopulations_3)
+    SELECT        TOP (100) PERCENT LS.FACILITY, LS.[IP by Facility], LS.[Duration In Custody], FORMAT(LS.[Average Time In Custody (days)], 'N2') AS [Average Time In Custody (days) by Duration], 
+                              FORMAT(LS.[IP by Facility] * 100.0 / FP.[IP Population by Facility], 'N2') AS [Percentage by Facility and days], FORMAT(FP.[IP Population by Facility] * 100.0 /
+                                  (SELECT        SUM([IP Population by Facility]) AS Expr1
+                                    FROM            FacilityPopulations AS FacilityPopulations_2), 'N2') AS [Overall Percentage by Facility], FP.[IP Population by Facility],
+                                  (SELECT        SUM([IP Population by Facility]) AS Expr1
+                                    FROM            FacilityPopulations AS FacilityPopulations_1) AS [Total IP Population], FORMAT
+                                  ((SELECT        SUM([Overall Total Time In Custody]) AS Expr1
+                                      FROM            OverallEOMCalc AS OverallEOMCalc_2) * 1.0 /
+                                  (SELECT        SUM([Total IP Population]) AS Expr1
+                                    FROM            OverallEOMCalc AS OverallEOMCalc_1), 'N2') AS [Overall Average Time In Custody (days)], DATEADD(DAY, - 1, DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1)) AS [Last Day Previous Month]
+     FROM            TimeInCustodyEOM AS LS INNER JOIN
+                              FacilityPopulations AS FP ON LS.FACILITY = FP.FACILITY
+     ORDER BY LS.FACILITY, CASE LS.[Duration In Custody] WHEN '30 days or less' THEN 1 WHEN '31 - 60 days' THEN 2 WHEN '61 - 90 days' THEN 3 ELSE 4 END
