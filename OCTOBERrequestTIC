@@ -1,0 +1,84 @@
+WITH OffenseData AS (
+    SELECT
+        B.PPN,
+        B.FACILITY,
+        COALESCE(CL.OVERRIDDEN, CL.CLASSIFICATION, 'UNKNOWN') AS [CLASSIFICATION],
+        FORMAT(HC.MOVEIN, 'MM-dd-yyyy') AS [MOVEIN DATE],
+        DATEDIFF(DAY, HC.MOVEIN, COALESCE(HC.MOVEOUT, GETDATE())) AS [Time In Custody],
+      
+        GREATEST(
+            DATEDIFF(DAY, 
+                CASE WHEN HC.MOVEIN < '2024-08-01' THEN '2024-08-01' ELSE HC.MOVEIN END, 
+                CASE WHEN GETDATE() >= '2024-08-31' THEN '2024-08-31' ELSE GETDATE() END
+            ), 0
+        ) AS [Time in Custody AUG 2024],
+
+        GREATEST(
+            DATEDIFF(DAY, 
+                CASE WHEN HC.MOVEIN < '2024-09-01' THEN '2024-09-01' ELSE HC.MOVEIN END, 
+                CASE WHEN GETDATE() >= '2024-09-30' THEN '2024-09-30' ELSE GETDATE() END
+            ), 0
+        ) AS [Time in Custody SEPT 2024],
+
+        B.LNAME AS [LAST NAME],
+        B.RNAME AS [FIRST NAME],
+        COALESCE(DC.SEVERITY, 'NONE') AS [MISCONDUCT HISTORY],  
+        DC.FINDINGDATE AS [FINDING DATE],                       
+        STA.CCLASS AS [CHARGES],                                
+        ROW_NUMBER() OVER (PARTITION BY B.PPN ORDER BY HC.MOVEIN DESC) AS rn
+    FROM 
+        V_BAILVIEW B
+    LEFT JOIN 
+        REP_HOUSINGCHANGES HC ON B.OFFENDER = HC.OFFENDER 
+    LEFT JOIN 
+        REP_CHARGES CH ON B.DOCKET = CH.DOCKET
+    LEFT JOIN 
+        (SELECT CRIME, CCLASS
+         FROM REP_STATUTES
+         WHERE CCLASS IN ('F3', 'M1', 'M2', 'M3', 'M')
+        ) STA ON CH.AMCHARGE = STA.CRIME 
+    LEFT JOIN 
+        (SELECT OFFENDER, 
+                STRING_AGG(
+                    CASE 
+                        WHEN SEVERITY IN ('Major', 'Critical', 'Minor') THEN 
+                            CONCAT(COALESCE(SEVERITY, 'NONE'), ' (', FORMAT(FINDINGDATE, 'yyyy-MM-dd'), ')')
+                        ELSE 
+                            COALESCE(SEVERITY, 'NONE')  
+                    END, ', ') AS SEVERITY, 
+                MAX(FINDINGDATE) AS FINDINGDATE 
+         FROM REP_DCASES
+         WHERE FINDINGDATE BETWEEN '2024-08-01' AND '2024-09-30'
+         GROUP BY OFFENDER
+        ) DC ON B.OFFENDER = DC.OFFENDER
+    LEFT JOIN 
+        REP_CLASSIFICATION CL ON B.OFFENDER = CL.OFFENDER
+        AND CL.EVALUATED = (
+            SELECT MAX(CL_SUB.EVALUATED)
+            FROM REP_CLASSIFICATION CL_SUB
+            WHERE CL_SUB.OFFENDER = CL.OFFENDER
+        )
+    WHERE 
+        COALESCE(CL.OVERRIDDEN, CL.CLASSIFICATION) IN ('MINIMUM', 'COMMUNITY')
+        AND STA.CCLASS IS NOT NULL
+)
+ 
+SELECT    
+    PPN,
+    FACILITY,
+    [CLASSIFICATION],
+    [MOVEIN DATE], 
+    [LAST NAME],
+    [FIRST NAME],
+    [MISCONDUCT HISTORY],  
+    --[FINDING DATE],        
+    [CHARGES],
+    --[Time In Custody], 
+  [Time in Custody AUG 2024], 
+    [Time in Custody SEPT 2024] 
+FROM
+    OffenseData
+WHERE rn = 1 
+ORDER BY
+    [MISCONDUCT HISTORY],
+    [Time In Custody];
